@@ -1,0 +1,10 @@
+{
+  "key.categories.mobfarmtracker": "Mob Farm Tracker",
+  "key.mobfarmtracker.open_gui": "Open mob farm detail screen",
+  "key.mobfarmtracker.toggle_tracking": "Toggle mob farm tracking on/off",
+  "mobfarmtracker.screen.title": "Mob Farm Tracker",
+  "mobfarmtracker.screen.filter": "Filter",
+  "mobfarmtracker.filter.hostile": "Hostile",
+  "mobfarmtracker.filter.passive": "Passive",
+  "mobfarmtracker.filter.both": "Both"
+}

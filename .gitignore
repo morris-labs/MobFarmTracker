@@ -1,0 +1,27 @@
+# gradle
+build
+.gradle
+
+# eclipse
+bin
+*.launch
+.settings
+.metadata
+.classpath
+.project
+
+# idea
+out
+*.ipr
+*.iws
+*.iml
+.idea
+
+# runs
+run
+runs
+logs
+
+# os
+.DS_Store
+Thumbs.db
