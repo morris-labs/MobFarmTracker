@@ -69,6 +69,18 @@ generated the first time the server starts:
 | `rateWindowSeconds` | `10` | Default length of the rolling window used for per-second rates. |
 | `populationSampleIntervalTicks` | `5` | How often, in ticks, to rescan the world for the current population. Lower values are more responsive but cost more server time per scan. Prefer `5` (4 scans/second) over `1` (20 scans/second) unless you've confirmed your hardware handles it at scale. |
 
+Operators (permission level 2+) can change `populationSampleIntervalTicks`
+while the server is running, without editing the config file or restarting:
+
+```
+/mobfarmtracker samplerate <ticks>
+```
+
+Run `/mobfarmtracker samplerate` with no argument to see the current value.
+Watch your server's tick time after lowering it — this setting controls how
+often the mod scans every mob in range, which is the main cost driver on a
+farm holding hundreds to low thousands of mobs.
+
 Players can override the first two settings, plus the mob filter, from the
 in-game detail screen. Per-player settings live in memory only and reset to
 these defaults when the server restarts.

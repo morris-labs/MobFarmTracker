@@ -5,6 +5,7 @@ import com.mobfarmtracker.client.ClientInputHandler;
 import com.mobfarmtracker.client.ClientSetup;
 import com.mobfarmtracker.client.KeyBindings;
 import com.mobfarmtracker.network.NetworkHandler;
+import com.mobfarmtracker.server.ServerCommands;
 import com.mobfarmtracker.server.ServerMobTracker;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
@@ -29,6 +30,7 @@ public final class MobFarmTracker {
         modContainer.registerConfig(ModConfig.Type.COMMON, CommonConfig.SPEC);
         modEventBus.addListener(NetworkHandler::register);
         NeoForge.EVENT_BUS.register(ServerMobTracker.class);
+        NeoForge.EVENT_BUS.register(ServerCommands.class);
 
         if (dist == Dist.CLIENT) {
             modContainer.registerConfig(ModConfig.Type.CLIENT, ClientConfig.SPEC);
