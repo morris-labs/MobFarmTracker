@@ -12,8 +12,8 @@ import java.util.List;
 
 /**
  * Server-to-client stats for the mob farm tracker, sent about once a second per player.
- * Carries the aggregate totals for the HUD overlay plus a per-entity-type breakdown for
- * the detail screen.
+ * Carries the aggregate totals for the HUD overlay plus per-entity-type and per-item-type
+ * breakdowns for the detail screen.
  */
 public record MobStatsPayload(
         int totalCurrentCount,
@@ -21,7 +21,9 @@ public record MobStatsPayload(
         int totalNonCrammingDeathCount,
         int totalCrammingDeathCount,
         int windowSeconds,
-        List<MobTypeStats> perType
+        List<MobTypeStats> perType,
+        List<ItemDropStats> perItem,
+        int totalXpDropped
 ) implements CustomPacketPayload {
     public static final Type<MobStatsPayload> TYPE =
             new Type<>(ResourceLocation.fromNamespaceAndPath(MobFarmTracker.MODID, "mob_stats"));
@@ -31,13 +33,32 @@ public record MobStatsPayload(
         return TYPE;
     }
 
-    public static final StreamCodec<FriendlyByteBuf, MobStatsPayload> STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.VAR_INT, MobStatsPayload::totalCurrentCount,
-            ByteBufCodecs.VAR_INT, MobStatsPayload::totalSpawnCount,
-            ByteBufCodecs.VAR_INT, MobStatsPayload::totalNonCrammingDeathCount,
-            ByteBufCodecs.VAR_INT, MobStatsPayload::totalCrammingDeathCount,
-            ByteBufCodecs.VAR_INT, MobStatsPayload::windowSeconds,
-            ByteBufCodecs.collection(ArrayList::new, MobTypeStats.STREAM_CODEC), MobStatsPayload::perType,
-            MobStatsPayload::new
+    private static final StreamCodec<FriendlyByteBuf, List<MobTypeStats>> MOB_LIST_CODEC =
+            ByteBufCodecs.collection(ArrayList::new, MobTypeStats.STREAM_CODEC);
+    private static final StreamCodec<FriendlyByteBuf, List<ItemDropStats>> ITEM_LIST_CODEC =
+            ByteBufCodecs.collection(ArrayList::new, ItemDropStats.STREAM_CODEC);
+
+    // StreamCodec.composite supports at most 6 fields, so encode/decode manually.
+    public static final StreamCodec<FriendlyByteBuf, MobStatsPayload> STREAM_CODEC = StreamCodec.of(
+            (buf, p) -> {
+                buf.writeVarInt(p.totalCurrentCount());
+                buf.writeVarInt(p.totalSpawnCount());
+                buf.writeVarInt(p.totalNonCrammingDeathCount());
+                buf.writeVarInt(p.totalCrammingDeathCount());
+                buf.writeVarInt(p.windowSeconds());
+                MOB_LIST_CODEC.encode(buf, p.perType());
+                ITEM_LIST_CODEC.encode(buf, p.perItem());
+                buf.writeVarInt(p.totalXpDropped());
+            },
+            buf -> new MobStatsPayload(
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    buf.readVarInt(),
+                    MOB_LIST_CODEC.decode(buf),
+                    ITEM_LIST_CODEC.decode(buf),
+                    buf.readVarInt()
+            )
     );
 }

@@ -34,6 +34,7 @@ public final class MobFarmHudOverlay implements LayeredDraw.Layer {
                 "Spawn rate: %.2f/sec".formatted(ClientMobStats.getSpawnRatePerSecond()),
                 "Kill rate: %.2f/sec".formatted(ClientMobStats.getNonCrammingDeathRatePerSecond()),
                 "Cramming rate: %.2f/sec".formatted(ClientMobStats.getCrammingDeathRatePerSecond()),
+                "XP rate: %.1f/sec".formatted(ClientMobStats.getTotalXpRatePerSecond()),
         };
 
         for (int i = 0; i < lines.length; i++) {

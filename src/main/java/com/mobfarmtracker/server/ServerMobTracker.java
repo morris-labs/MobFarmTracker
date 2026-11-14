@@ -2,6 +2,7 @@ package com.mobfarmtracker.server;
 
 import com.mobfarmtracker.CommonConfig;
 import com.mobfarmtracker.MobFilter;
+import com.mobfarmtracker.network.ItemDropStats;
 import com.mobfarmtracker.network.MobStatsPayload;
 import com.mobfarmtracker.network.MobTypeStats;
 import com.mobfarmtracker.network.PlayerSettingsPayload;
@@ -12,13 +13,17 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.damagesource.DamageTypes;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.entity.EntityTypeTest;
 import net.minecraft.world.phys.AABB;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.entity.EntityJoinLevelEvent;
 import net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
+import net.neoforged.neoforge.event.entity.living.LivingDropsEvent;
+import net.neoforged.neoforge.event.entity.living.LivingExperienceDropEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -123,6 +128,53 @@ public final class ServerMobTracker {
     }
 
     @SubscribeEvent
+    public static void onLivingDrops(LivingDropsEvent event) {
+        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)) {
+            return;
+        }
+        long now = level.getGameTime();
+        for (ServerPlayer player : level.players()) {
+            PlayerData data = dataFor(player.getUUID());
+            if (!data.enabled) {
+                continue;
+            }
+            if (data.filter.matches(mob) && withinRadius(player, mob, data.radiusChunks)) {
+                for (ItemEntity itemEntity : event.getDrops()) {
+                    var stack = itemEntity.getItem();
+                    Item item = stack.getItem();
+                    int qty = stack.getCount();
+                    data.itemDropTimes
+                            .computeIfAbsent(item, k -> new ArrayDeque<>())
+                            .addLast(new ItemDropSample(now, qty));
+                }
+            }
+        }
+    }
+
+    @SubscribeEvent
+    public static void onLivingExperienceDrop(LivingExperienceDropEvent event) {
+        if (!(event.getEntity() instanceof Mob mob) || !(mob.level() instanceof ServerLevel level)) {
+            return;
+        }
+        int xp = event.getDroppedExperience();
+        if (xp <= 0) {
+            return;
+        }
+        long now = level.getGameTime();
+        for (ServerPlayer player : level.players()) {
+            PlayerData data = dataFor(player.getUUID());
+            if (!data.enabled) {
+                continue;
+            }
+            if (data.filter.matches(mob) && withinRadius(player, mob, data.radiusChunks)) {
+                data.xpDropTimes
+                        .computeIfAbsent(mob.getType(), t -> new ArrayDeque<>())
+                        .addLast(new XpDropSample(now, xp));
+            }
+        }
+    }
+
+    @SubscribeEvent
     public static void onEntityLeave(EntityLeaveLevelEvent event) {
         if (event.getEntity() instanceof Mob) {
             SPAWN_TICK_BY_ID.remove(event.getEntity().getId());
@@ -143,6 +195,8 @@ public final class ServerMobTracker {
                 data.otherDeathTimes.clear();
                 data.crammingDeathTimes.clear();
                 data.lifespanSamples.clear();
+                data.itemDropTimes.clear();
+                data.xpDropTimes.clear();
                 data.currentCounts = Map.of();
                 PacketDistributor.sendToPlayer(player, buildPayload(data));
                 continue;
@@ -157,6 +211,8 @@ public final class ServerMobTracker {
             pruneAll(data.otherDeathTimes, now, windowTicks);
             pruneAll(data.crammingDeathTimes, now, windowTicks);
             pruneLifespans(data.lifespanSamples, now, windowTicks);
+            pruneItemDrops(data.itemDropTimes, now, windowTicks);
+            pruneXpDrops(data.xpDropTimes, now, windowTicks);
 
             if (now % CommonConfig.POPULATION_SAMPLE_INTERVAL_TICKS.get() == 0) {
                 data.currentCounts = countNearbyMobs(level, player, data);
@@ -187,33 +243,49 @@ public final class ServerMobTracker {
         types.addAll(data.otherDeathTimes.keySet());
         types.addAll(data.crammingDeathTimes.keySet());
         types.addAll(data.lifespanSamples.keySet());
+        types.addAll(data.xpDropTimes.keySet());
 
         List<MobTypeStats> perType = new ArrayList<>();
         int totalCurrent = 0;
         int totalSpawn = 0;
         int totalOtherDeaths = 0;
         int totalCramming = 0;
+        int totalXp = 0;
 
         for (EntityType<?> type : types) {
             int current = data.currentCounts.getOrDefault(type, 0);
             int spawn = sizeOf(data.spawnTimes.get(type));
             int otherDeaths = sizeOf(data.otherDeathTimes.get(type));
             int cramming = sizeOf(data.crammingDeathTimes.get(type));
+            int xp = totalXpDropped(data.xpDropTimes.get(type));
             float avgLifespanSeconds = averageLifespanSeconds(data.lifespanSamples.get(type));
-            if (current == 0 && spawn == 0 && otherDeaths == 0 && cramming == 0) {
+            if (current == 0 && spawn == 0 && otherDeaths == 0 && cramming == 0 && xp == 0) {
                 continue;
             }
             totalCurrent += current;
             totalSpawn += spawn;
             totalOtherDeaths += otherDeaths;
             totalCramming += cramming;
+            totalXp += xp;
 
-            perType.add(new MobTypeStats(BuiltInRegistries.ENTITY_TYPE.getKey(type), current, spawn, otherDeaths, cramming, avgLifespanSeconds));
+            perType.add(new MobTypeStats(BuiltInRegistries.ENTITY_TYPE.getKey(type), current, spawn, otherDeaths, cramming, avgLifespanSeconds, xp));
         }
 
         perType.sort(Comparator.comparingInt(MobTypeStats::currentCount).reversed());
 
-        return new MobStatsPayload(totalCurrent, totalSpawn, totalOtherDeaths, totalCramming, data.windowSeconds, perType);
+        List<ItemDropStats> perItem = new ArrayList<>();
+        for (Map.Entry<Item, Deque<ItemDropSample>> entry : data.itemDropTimes.entrySet()) {
+            int total = 0;
+            for (ItemDropSample s : entry.getValue()) {
+                total += s.count();
+            }
+            if (total > 0) {
+                perItem.add(new ItemDropStats(BuiltInRegistries.ITEM.getKey(entry.getKey()), total));
+            }
+        }
+        perItem.sort(Comparator.comparingInt(ItemDropStats::dropCount).reversed());
+
+        return new MobStatsPayload(totalCurrent, totalSpawn, totalOtherDeaths, totalCramming, data.windowSeconds, perType, perItem, totalXp);
     }
 
     private static int sizeOf(Deque<Long> deque) {
@@ -263,8 +335,42 @@ public final class ServerMobTracker {
         map.values().removeIf(Deque::isEmpty);
     }
 
-    /** One mob's time-to-death, recorded against the tick it died so the sample can be pruned like any other rate. */
+    private static void pruneItemDrops(Map<Item, Deque<ItemDropSample>> map, long now, long windowTicks) {
+        for (Deque<ItemDropSample> deque : map.values()) {
+            while (!deque.isEmpty() && now - deque.peekFirst().dropTick() > windowTicks) {
+                deque.removeFirst();
+            }
+        }
+        map.values().removeIf(Deque::isEmpty);
+    }
+
+    private static void pruneXpDrops(Map<EntityType<?>, Deque<XpDropSample>> map, long now, long windowTicks) {
+        for (Deque<XpDropSample> deque : map.values()) {
+            while (!deque.isEmpty() && now - deque.peekFirst().dropTick() > windowTicks) {
+                deque.removeFirst();
+            }
+        }
+        map.values().removeIf(Deque::isEmpty);
+    }
+
+    private static int totalXpDropped(Deque<XpDropSample> samples) {
+        if (samples == null || samples.isEmpty()) {
+            return 0;
+        }
+        int total = 0;
+        for (XpDropSample sample : samples) {
+            total += sample.xp();
+        }
+        return total;
+    }
+
     private record LifespanSample(long deathTick, long lifespanTicks) {
+    }
+
+    private record ItemDropSample(long dropTick, int count) {
+    }
+
+    private record XpDropSample(long dropTick, int xp) {
     }
 
     private static final class PlayerData {
@@ -278,6 +384,8 @@ public final class ServerMobTracker {
         final Map<EntityType<?>, Deque<Long>> otherDeathTimes = new HashMap<>();
         final Map<EntityType<?>, Deque<Long>> crammingDeathTimes = new HashMap<>();
         final Map<EntityType<?>, Deque<LifespanSample>> lifespanSamples = new HashMap<>();
+        final Map<Item, Deque<ItemDropSample>> itemDropTimes = new HashMap<>();
+        final Map<EntityType<?>, Deque<XpDropSample>> xpDropTimes = new HashMap<>();
         Map<EntityType<?>, Integer> currentCounts = new HashMap<>();
     }
 }

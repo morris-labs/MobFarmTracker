@@ -1,5 +1,6 @@
 package com.mobfarmtracker.client;
 
+import com.mobfarmtracker.network.ItemDropStats;
 import com.mobfarmtracker.network.MobStatsPayload;
 import com.mobfarmtracker.network.MobTypeStats;
 
@@ -7,7 +8,7 @@ import java.util.List;
 
 /** Latest stats received from the server, read by the HUD overlay and the detail screen. */
 public final class ClientMobStats {
-    private static volatile MobStatsPayload latest = new MobStatsPayload(0, 0, 0, 0, 10, List.of());
+    private static volatile MobStatsPayload latest = new MobStatsPayload(0, 0, 0, 0, 10, List.of(), List.of(), 0);
 
     private ClientMobStats() {
     }
@@ -34,6 +35,22 @@ public final class ClientMobStats {
 
     public static List<MobTypeStats> getPerType() {
         return latest.perType();
+    }
+
+    public static List<ItemDropStats> getPerItem() {
+        return latest.perItem();
+    }
+
+    public static double getTotalItemDropRatePerSecond() {
+        return latest.perItem().stream().mapToInt(ItemDropStats::dropCount).sum() / (double) Math.max(1, latest.windowSeconds());
+    }
+
+    public static double getTotalXpRatePerSecond() {
+        return latest.totalXpDropped() / (double) Math.max(1, latest.windowSeconds());
+    }
+
+    public static double getXpRatePerSecond(int xpDropped) {
+        return xpDropped / (double) Math.max(1, latest.windowSeconds());
     }
 
     public static int getWindowSeconds() {
