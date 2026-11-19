@@ -18,8 +18,14 @@ from the farm's mechanism or from mobs crushing each other in a hopper.
   so you can tell your farm's kill mechanism apart from cramming losses.
 - **Average time to death** — how long a mob type survives after spawning,
   averaged over the same rolling window.
-- **Per-mob-type breakdown** — a detail screen listing every tracked entity
-  type with its own count and rates, sortable by count.
+- **Per-mob-type breakdown** — the Mobs tab lists every tracked entity type
+  with its own count, spawn rate, kill rate, cramming rate, and average
+  lifespan.
+- **Item drop tracking** — the Items tab shows per-item drop rates (items/s)
+  across the current sample window, so you can see what your farm actually
+  produces.
+- **XP tracking** — the XP tab shows per-mob XP earn rates (XP/s), sorted by
+  total XP dropped in the window.
 - **Hostile / passive / both filter** — track only hostile mobs, only
   passive and neutral mobs, or everything.
 - **Adjustable in-game** — radius, sample window, and the mob filter are all
@@ -53,10 +59,16 @@ showing the current count and the spawn, kill, and cramming rates.
 | Open the detail screen | Unbound — set one under **Options > Controls > Key Binds > Mob Farm Tracker** |
 | Toggle tracking on or off | Unbound — set one under the same menu |
 
-The detail screen lists every tracked mob type with its count, spawn rate,
-kill rate, cramming rate, and average lifespan. From there you can also
-change your tracking radius, sample window, and mob filter — these apply
-immediately and are remembered for your player until the server restarts.
+The detail screen has three tabs:
+
+- **Mobs** — lists every tracked mob type with its count, spawn rate, kill
+  rate, cramming rate, and average lifespan.
+- **Items** — lists per-item drop rates across the current sample window.
+- **XP** — lists per-mob XP earn rates, sorted by total XP dropped.
+
+From the detail screen you can also change your tracking radius, sample
+window, and mob filter. These apply immediately and are remembered for your
+player until the server restarts.
 
 ## Configuration
 
